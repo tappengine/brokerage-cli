@@ -1,133 +1,71 @@
 # bm — Buildmarkets CLI
 
-A thin, scriptable command-line front end to the Buildmarkets brokerage API for
-humans at terminals, CI/CD pipelines, and focused-action agents. Single static
-Go binary, no runtime dependencies. The CLI talks to the API gateway **directly**
-— never through the MCP.
+The official command-line interface for the Buildmarkets brokerage API. A single
+static binary for macOS, Linux, and Windows.
 
-```
-bm login                                   # trader (OAuth device flow)
-bm config set environment sandbox
-bm orders place --account <id> --symbol AAPL --side buy --qty 10 --type market
-```
+> This repository hosts the **published binaries** (see
+> [Releases](https://github.com/tappengine/brokerage-cli/releases)) and install
+> tooling. The source is maintained privately.
 
 ## Install
 
 | Platform | Command |
 |---|---|
-| macOS (Homebrew) | `brew install buildmarkets/tap/bm` |
-| Linux/macOS (curl) | `curl -fsSL https://cli.buildmarkets.com/install.sh \| sh` |
-| Windows (Scoop) | `scoop install bm` |
-| Any (Go) | `go install github.com/tappengine/brokerage-cli@latest` |
-| Any | Download from [GitHub Releases](https://github.com/tappengine/brokerage-cli/releases) |
+| macOS / Linux (curl) | `curl -fsSL https://raw.githubusercontent.com/tappengine/brokerage-cli/main/install.sh \| sh` |
+| macOS (Homebrew) | `brew install tappengine/tap/bm` |
+| Any | Download the binary for your OS/arch from [Releases](https://github.com/tappengine/brokerage-cli/releases/latest) |
 
-The binary installs as `bm` with a `buildmarkets` long-form alias.
+After installing, verify:
+
+```bash
+bm --version
+```
+
+## Quick start
+
+```bash
+# Partner / API key
+bm config set environment qa            # sandbox | qa | live
+bm config set api-key    <key>
+bm config set api-secret <secret>
+bm whoami
+bm marketdata quote AAPL
+
+# Trader / OAuth
+bm login
+```
 
 ## Authentication
 
-Two modes only (resolved in this order; the first match wins):
+Two modes (resolved in order, first match wins):
 
 1. `--api-key` / `--api-secret` flags
 2. `BUILDMARKETS_API_KEY` / `BUILDMARKETS_API_SECRET` env vars
-3. Keycloak access token from `bm login` (OAuth device flow, trader)
-4. API key + secret from `bm config` (partner / M2M)
+3. Keycloak token from `bm login` (OAuth device flow)
+4. API key + secret from `bm config`
 
-Credentials are stored in the OS keychain (macOS Keychain, Windows Credential
-Manager, libsecret on Linux), falling back to `~/.buildmarkets/config.yaml`
-(0600) only when no keychain is available.
+Credentials are stored in the OS keychain (or `~/.buildmarkets/config.yaml` at
+`0600` if no keychain is available).
 
-```
-bm login                       # trader
-bm config set api-key  <key>   # partner
-bm config set api-secret <secret>
-bm whoami
-bm logout
-```
+## Output & exit codes
 
-## Output
+- Table on a TTY, JSON when piped. `--json` / `--table` force the format.
+- Data → stdout, diagnostics → stderr.
+- Exit codes: `0` ok, `1` generic, `2` validation, `3` auth, `4` not found,
+  `5` rate limited, `6` upstream unavailable.
 
-- **TTY** → table by default. **Non-TTY** → JSON by default (auto-detected).
-- `--json` / `--table` force the format.
-- Data goes to **stdout**, all diagnostics and errors to **stderr** — always.
-
-## Interaction modes
-
-- Interactive (default): confirms before the three bulk-destructive commands
-  (`orders cancel-all`, `positions close-all`, `accounts close`).
-- `--non-interactive` or `BUILDMARKETS_NON_INTERACTIVE=1`: zero prompts, zero
-  color, zero animation — for agents and CI. `--yes` skips a single prompt.
-
-## Exit codes
-
-| Code | Meaning |
-|---|---|
-| 0 | success |
-| 1 | generic error |
-| 2 | validation error |
-| 3 | auth error |
-| 4 | not found |
-| 5 | rate limited |
-| 6 | upstream unavailable |
-
-## Command surface
-
-The bulk of the surface is **generated from the OpenAPI spec** (`generated/`,
-never hand-edited) and grouped by resource:
+## Commands
 
 ```
-bm accounts   list | get <id> | open | update <id> | close <id> | balances <id>
-bm orders     place | list | get | modify | cancel | executions | cancel-all
-bm positions  list | get | close-all
-bm funding    deposit | withdraw | activity | ach (link|list|remove)
-bm marketdata quote | historical | profile | dividends | news | options ...
-bm webhooks   create | list | get | update | delete | test | deliveries | tail
-bm documents  list | types | upload | email | w9
-bm keys       create | list | revoke
-bm system     health | ready | live | metrics
+bm accounts | orders | positions | funding | marketdata | webhooks | documents | keys | system
+bm webhooks tail        # stream/forward webhook events locally
+bm logs tail            # stream API request logs
+bm dev sandbox reset    # reseed a sandbox tenant
+bm migrate from-alpaca  # migrate from the Alpaca Broker API
 ```
 
-Hand-written **wedge commands** layer on top:
+Run `bm <command> --help` for details.
 
-- `bm webhooks tail` — stream/forward webhook events locally (no tunnel needed)
-- `bm logs tail` — stream API request logs for your tenant
-- `bm dev sandbox reset` — wipe and reseed a sandbox tenant
-- `bm migrate from-alpaca plan|apply|status` — Alpaca Broker API migration
+## Support
 
-### `--watch`
-
-Read commands accept `--watch` (poll every 2s, `--watch-interval <s>` to
-override). On a TTY it re-renders the table; off a TTY it emits newline-delimited
-JSON (NDJSON). `tail` commands stream natively and ignore `--watch`.
-
-## Environment variables
-
-| Variable | Effect |
-|---|---|
-| `BUILDMARKETS_ENV` | `sandbox` / `live` |
-| `BUILDMARKETS_API_KEY` / `BUILDMARKETS_API_SECRET` | partner auth |
-| `BUILDMARKETS_NON_INTERACTIVE` | disable prompts/color |
-| `BUILDMARKETS_NO_UPDATE_CHECK` | skip the auto-update check |
-| `BUILDMARKETS_DEBUG` | verbose logging to stderr |
-| `BUILDMARKETS_API_BASE_URL` / `BUILDMARKETS_AUTH_*` | endpoint overrides |
-
-## Development
-
-```
-make build       # build ./bm for the current platform
-make generate    # regenerate generated/ from the OpenAPI spec
-make cross       # cross-compile all 5 release targets into dist/
-make test vet    # tests and static analysis
-```
-
-The `generated/` package is checked in but produced entirely by
-`go run ./generator`. Any change to the API surface flows through
-OpenAPI → `make generate` → CI → release. The release workflow fails if
-`generated/` is stale.
-
-### `[VERIFY-BACKEND]` endpoints
-
-The streaming wedges depend on endpoints not yet in the OpenAPI spec
-(`GET /v1/webhooks/stream`, `GET /v1/logs/stream`, `POST /v1/dev/sandbox/reset`,
-`GET /v1/dev/sandbox/test-paths`). They are built to the documented contracts
-with graceful fallback; confirm the SSE event shapes and forwarded webhook
-signature header names with the backend team before relying on them (spec §10).
+Issues and questions: contact the Buildmarkets team.
