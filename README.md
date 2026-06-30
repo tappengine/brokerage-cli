@@ -66,6 +66,13 @@ bm migrate from-alpaca  # migrate from the Alpaca Broker API
 
 Run `bm <command> --help` for details.
 
+## Documentation
+
+- **[Developer Guide](docs/DEVELOPER_GUIDE.md)** — install, auth, configuration,
+  every command with required parameters and examples, and scripting recipes.
+- **[Command Reference](docs/COMMAND_REFERENCE.md)** — the full flag-level
+  reference for all commands.
+
 ## Support
 
 Issues and questions: contact the Buildmarkets team.
